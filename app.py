@@ -146,15 +146,15 @@ DISEASE_CLASSES = [
 ]
 
 # =====================================================
-# LOAD MODELS
+# LAZY LOAD MODELS (To save memory on Render Free Tier)
 # =====================================================
 @st.cache_resource
-def load_models():
-    cnn = load_model("crop_disease_cnn.h5", compile=False)
-    ann = load_model("crop_yield_annnn_model.h5", compile=False)
-    return cnn, ann
+def load_cnn_model():
+    return load_model("crop_disease_cnn.h5", compile=False)
 
-cnn_model, ann_model = load_models()
+@st.cache_resource
+def load_ann_model():
+    return load_model("crop_yield_annnn_model.h5", compile=False)
 
 # =====================================================
 # SIDEBAR
@@ -231,6 +231,8 @@ elif page == "Crop Yield Prediction":
         X_input = np.array([[year, rainfall, pesticides, temperature]])
         X_scaled = (X_input - SCALER_MEAN) / SCALER_SCALE
 
+        # Lazy load model
+        ann_model = load_ann_model()
         pred = ann_model.predict(X_scaled)
         yield_pred = float(pred[0][0])
 
@@ -262,6 +264,8 @@ elif page == "Leaf Disease Detection":
         img_array = np.expand_dims(img_array, axis=0)
 
         if st.button("Predict Disease"):
+            # Lazy load model
+            cnn_model = load_cnn_model()
             preds = cnn_model.predict(img_array)
             class_index = int(np.argmax(preds))
             confidence = float(np.max(preds)) * 100
