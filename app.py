@@ -1,34 +1,21 @@
 import streamlit as st
 import numpy as np
-import pandas as pd
+import tensorflow as tf
 from tensorflow.keras.models import load_model
 from PIL import Image
-import joblib
-import warnings
-import os
 
-# ===============================
-# CLEAN WARNINGS
-# ===============================
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-warnings.filterwarnings("ignore")
-
-# ===============================
+# =====================================================
 # PAGE CONFIG
-# ===============================
-# ===============================
-# PAGE CONFIG
-# ===============================
+# =====================================================
 st.set_page_config(
-    page_title="Smart Crop Disease & Yield Prediction System",
-    page_icon="🌿",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="Smart Crop Disease & Yield Prediction",
+    page_icon="🌱",
+    layout="wide"
 )
 
-# ===============================
-# CUSTOM CSS & STYLING
-# ===============================
+# =====================================================
+# CUSTOM CSS & STYLING (Nature/Glassmorphism)
+# =====================================================
 st.markdown("""
 <style>
     /* Global Styles */
@@ -105,102 +92,97 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ===============================
-# LOAD MODELS + SCALER
-# ===============================
-@st.cache_resource
-def load_all():
-    cnn = load_model("crop_disease_cnn.h5", compile=False)
-    ann = load_model("crop_yield_ann_model.h5", compile=False)
-    scaler = joblib.load("yield_scaler.pkl")
-    return cnn, ann, scaler
-
-cnn_model, ann_model, scaler = load_all()
-
-# ===============================
-# CLASS NAMES (38 CLASSES)
-# ===============================
-CLASS_NAMES = [
-    'Apple___Apple_scab',
-    'Apple___Black_rot',
-    'Apple___Cedar_apple_rust',
-    'Apple___healthy',
-    'Blueberry___healthy',
-    'Cherry___Powdery_mildew',
-    'Cherry___healthy',
-    'Corn___Cercospora_leaf_spot',
-    'Corn___Common_rust',
-    'Corn___Northern_Leaf_Blight',
-    'Corn___healthy',
-    'Grape___Black_rot',
-    'Grape___Esca',
-    'Grape___Leaf_blight',
-    'Grape___healthy',
-    'Orange___Haunglongbing',
-    'Peach___Bacterial_spot',
-    'Peach___healthy',
-    'Pepper___Bacterial_spot',
-    'Pepper___healthy',
-    'Potato___Early_blight',
-    'Potato___Late_blight',
-    'Potato___healthy',
-    'Raspberry___healthy',
-    'Soybean___healthy',
-    'Squash___Powdery_mildew',
-    'Strawberry___Leaf_scorch',
-    'Strawberry___healthy',
-    'Tomato___Bacterial_spot',
-    'Tomato___Early_blight',
-    'Tomato___Late_blight',
-    'Tomato___Leaf_Mold',
-    'Tomato___Septoria_leaf_spot',
-    'Tomato___Spider_mites',
-    'Tomato___Target_Spot',
-    'Tomato___Tomato_Yellow_Leaf_Curl_Virus',
-    'Tomato___Tomato_mosaic_virus',
-    'Tomato___healthy'
-]
-
-# ===============================
-# IMAGE PREPROCESS
-# ===============================
-def preprocess_image(img):
-    img = img.resize((224, 224))
-    img = np.array(img) / 255.0
-    img = np.expand_dims(img, axis=0)
-    return img
-
-# ===============================
+# =====================================================
 # SESSION STATE NAVIGATION
-# ===============================
+# =====================================================
 if 'page' not in st.session_state:
-    st.session_state.page = "🏠 Home"
+    st.session_state.page = "Home"
 
 def set_page(page_name):
     st.session_state.page = page_name
 
-# ===============================
-# SIDEBAR NAVIGATION
-# ===============================
-st.sidebar.title("🌾 Navigation")
+# =====================================================
+# SCALER VALUES (FROM TRAINING)
+# Feature order:
+# [Year, Rainfall, Pesticides, Temperature]
+# =====================================================
+SCALER_MEAN = np.array([
+    2.00156863e+03,
+    1.14402452e+03,
+    3.71427680e+04,
+    2.05065489e+01
+])
 
-# REVISED SIDEBAR:
+SCALER_SCALE = np.array([
+    7.05651147e+00,
+    7.07271096e+02,
+    6.00480554e+04,
+    6.34043542e+00
+])
+
+# =====================================================
+# DISEASE CLASS NAMES (38 CLASSES)
+# =====================================================
+DISEASE_CLASSES = [
+    "Apple Scab", "Apple Black Rot", "Apple Cedar Rust", "Apple Healthy",
+    "Blueberry Healthy",
+    "Cherry Powdery Mildew", "Cherry Healthy",
+    "Corn Cercospora Leaf Spot", "Corn Common Rust",
+    "Corn Northern Leaf Blight", "Corn Healthy",
+    "Grape Black Rot", "Grape Esca", "Grape Leaf Blight", "Grape Healthy",
+    "Orange Huanglongbing (Citrus Greening)",
+    "Peach Bacterial Spot", "Peach Healthy",
+    "Pepper Bell Bacterial Spot", "Pepper Bell Healthy",
+    "Potato Early Blight", "Potato Late Blight", "Potato Healthy",
+    "Raspberry Healthy",
+    "Soybean Healthy",
+    "Squash Powdery Mildew",
+    "Strawberry Leaf Scorch", "Strawberry Healthy",
+    "Tomato Bacterial Spot", "Tomato Early Blight",
+    "Tomato Late Blight", "Tomato Leaf Mold",
+    "Tomato Septoria Leaf Spot", "Tomato Spider Mites",
+    "Tomato Target Spot", "Tomato Yellow Leaf Curl Virus",
+    "Tomato Mosaic Virus", "Tomato Healthy"
+]
+
+# =====================================================
+# LOAD MODELS
+# =====================================================
+@st.cache_resource
+def load_models():
+    cnn = load_model("crop_disease_cnn.h5", compile=False)
+    ann = load_model("crop_yield_annnn_model.h5", compile=False)
+    return cnn, ann
+
+cnn_model, ann_model = load_models()
+
+# =====================================================
+# SIDEBAR
+# =====================================================
+st.sidebar.title("🌱 Navigation")
+
+# Sync sidebar with session state
+# Ensure session state page is valid
+valid_pages = ["Home", "Crop Yield Prediction", "Leaf Disease Detection"]
+if st.session_state.page not in valid_pages:
+    st.session_state.page = "Home"
+
 page = st.sidebar.radio(
-    "Go to",
-    ["🏠 Home", "🌿 Crop Disease Detection", "📈 Crop Yield Prediction"],
-    key="navigation_radio",
-    index=["🏠 Home", "🌿 Crop Disease Detection", "📈 Crop Yield Prediction"].index(st.session_state.page)
+    "Select Page",
+    valid_pages,
+    index=valid_pages.index(st.session_state.page),
+    key="navigation_radio"
 )
 
 # Update session state if sidebar is used
 if page != st.session_state.page:
     st.session_state.page = page
+    st.rerun()
 
-
-# ===============================
-# 🏠 HOME
-# ===============================
-if page == "🏠 Home":
+# =====================================================
+# HOME
+# =====================================================
+if page == "Home":
     st.title("🌱 Smart Crop Disease & Yield Prediction System")
     
     st.markdown("### Welcome! Choose a service below:", unsafe_allow_html=True)
@@ -210,99 +192,80 @@ if page == "🏠 Home":
     with col1:
         st.markdown("""
         <div class="card">
-            <h3>🌿 Crop Disease Detection</h3>
+            <h3>🍃 Leaf Disease Detection</h3>
             <p>Upload a photo of a crop leaf to detect diseases using our advanced CNN model.</p>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Go to Disease Detection 🌿", use_container_width=True):
-            st.session_state.page = "🌿 Crop Disease Detection"
+        if st.button("Go to Disease Detection 🍃", use_container_width=True):
+            st.session_state.page = "Leaf Disease Detection"
             st.rerun()
 
     with col2:
         st.markdown("""
         <div class="card">
-            <h3>📈 Crop Yield Prediction</h3>
+            <h3>🌾 Crop Yield Prediction</h3>
             <p>Predict crop yield based on environmental factors like rainfall, temperature, and more.</p>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Go to Yield Prediction 📈", use_container_width=True):
-             st.session_state.page = "📈 Crop Yield Prediction"
+        if st.button("Go to Yield Prediction 🌾", use_container_width=True):
+             st.session_state.page = "Crop Yield Prediction"
              st.rerun()
 
-    st.markdown("---")
-    st.info("👈 You can also use the sidebar for navigation.")
+# =====================================================
+# CROP YIELD PREDICTION
+# =====================================================
+elif page == "Crop Yield Prediction":
+    st.title("🌾 Crop Yield Prediction")
 
-
-# ======================================================
-# 🌿 CROP DISEASE DETECTION
-# ======================================================
-elif page == "🌿 Crop Disease Detection":
-    st.title("🌿 Crop Disease Detection")
-
-    uploaded_file = st.file_uploader(
-        "Upload Crop Leaf Image 👨‍🌾",
-        type=["jpg", "jpeg", "png"]
-    )
-
-    if uploaded_file is not None:
-        img = Image.open(uploaded_file)
-        st.image(img, caption="Uploaded Leaf Image", width=250)
-
-        if st.button("Predict Disease"):
-            img_array = preprocess_image(img)
-            preds = cnn_model.predict(img_array)
-            class_index = np.argmax(preds)
-            confidence = np.max(preds) * 100
-
-            disease_name = CLASS_NAMES[class_index]
-
-            st.balloons() # Animation on success
-            st.success(f"🦠 Disease Detected: {disease_name}")
-            st.info(f"🔍 Confidence: {confidence:.2f}%")
-
-# ======================================================
-# 📈 CROP YIELD PREDICTION
-# ======================================================
-elif page == "📈 Crop Yield Prediction":
-    st.title("📈 Crop Yield Prediction")
-
-    area = st.selectbox("Area / Country", ["Albania", "India", "USA", "Other"])
-    crop = st.selectbox("Crop Type", ["Maize", "Rice", "Potatoes", "Wheat", "Soybeans"])
-    year = st.number_input("Year", min_value=1990, max_value=2030, value=2024)
-
+    year = st.number_input("Year", min_value=1990, max_value=2035, value=2024)
     rainfall = st.number_input("Average Rainfall (mm/year)", value=1200.0)
     pesticides = st.number_input("Pesticides Used (tonnes)", value=100.0)
     temperature = st.number_input("Average Temperature (°C)", value=25.0)
 
     if st.button("Predict Yield"):
-        input_df = pd.DataFrame({
-            "Area": [area],
-            "Item": [crop],
-            "Year": [year],
-            "average_rain_fall_mm_per_year": [rainfall],
-            "pesticides_tonnes": [pesticides],
-            "avg_temp": [temperature]
-        })
 
-        input_df = pd.get_dummies(input_df)
-        input_df = input_df.apply(pd.to_numeric, errors="coerce").fillna(0)
+        # 🔧 FIX 1: Prevent ANN extrapolation
+        if year > 2013:
+            year = 2013
 
-        required_features = ann_model.input_shape[1]
-        if input_df.shape[1] < required_features:
-            for i in range(required_features - input_df.shape[1]):
-                input_df[f"dummy_{i}"] = 0
+        X_input = np.array([[year, rainfall, pesticides, temperature]])
+        X_scaled = (X_input - SCALER_MEAN) / SCALER_SCALE
 
-        X_input = input_df.iloc[:, :required_features].values.astype("float32")
-        X_input = scaler.transform(X_input)
+        pred = ann_model.predict(X_scaled)
+        yield_pred = float(pred[0][0])
 
-        yield_pred = ann_model.predict(X_input)[0][0]
+        # 🔧 FIX 2: Cap unrealistic predictions
+        yield_pred = max(0, min(yield_pred, 80000))
 
-        quintal = yield_pred / 10000
-        tons = yield_pred / 100000
+        st.success(f"🌾 Predicted Yield: {yield_pred:.2f} hg/ha")
+        st.info(f"📦 Approx: {yield_pred / 1000:.2f} tons/hectare")
 
-        st.balloons() # Animation on success
-        st.success(f"🌾 Predicted Yield: {quintal:.2f} quintal/hectare")
-        st.info(f"📦 Approx: {tons:.2f} tons/hectare")
+        st.caption("ℹ️ Yield is estimated based on historical climate patterns.")
 
-st.markdown("---")
-st.caption("CNN + ANN based Smart Agriculture System")
+# =====================================================
+# LEAF DISEASE DETECTION
+# =====================================================
+elif page == "Leaf Disease Detection":
+    st.title("🍃 Leaf Disease Detection")
+
+    uploaded_file = st.file_uploader(
+        "Upload a leaf image",
+        type=["jpg", "jpeg", "png"]
+    )
+
+    if uploaded_file is not None:
+        image = Image.open(uploaded_file).convert("RGB")
+        st.image(image, caption="Uploaded Leaf Image", width=250)
+
+        img = image.resize((224, 224))
+        img_array = np.array(img) / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
+
+        if st.button("Predict Disease"):
+            preds = cnn_model.predict(img_array)
+            class_index = int(np.argmax(preds))
+            confidence = float(np.max(preds)) * 100
+            disease_name = DISEASE_CLASSES[class_index]
+
+            st.success(f"🦠 Disease Detected: {disease_name}")
+            st.info(f"🔍 Confidence: {confidence:.2f}%")
